@@ -8,6 +8,8 @@ from wtforms import StringField, SubmitField
 from wtforms.fields.numeric import FloatField
 from wtforms.validators import DataRequired
 import requests
+import os
+from dotenv import load_dotenv
 
 '''
 Red underlines? Install the required packages first: 
@@ -25,6 +27,8 @@ This will install the packages from requirements.txt for this project.
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
 Bootstrap5(app)
+
+load_dotenv()
 
 # CREATE DB
 class Base(DeclarativeBase):
@@ -77,6 +81,10 @@ class EditForm(FlaskForm):
     review = StringField(label='Your Review')
     submit = SubmitField(label='Done')
 
+class AddForm(FlaskForm):
+    title = StringField(label='Movie Title', validators=[DataRequired()])
+    submit = SubmitField(label='Add Movie')
+
 
 @app.route("/")
 def home():
@@ -97,8 +105,50 @@ def edit_movie_rating():
     return render_template('edit.html', movie=movie, form=edit_form)
 
 @app.route('/delete', methods=['GET', 'POST'])
-def delete():
-    pass
+def delete_movie():
+    movie_id = request.args.get('id')
+    movie_to_delete = db.get_or_404(Movie, movie_id)
+    db.session.delete(movie_to_delete)
+    db.session.commit()
+    return redirect(url_for('home'))
+
+
+@app.route('/add', methods=['GET', 'POST'])
+def add_movie():
+    add_form = AddForm()
+    if add_form.validate_on_submit():
+        movie_title = add_form.title.data
+        response = requests.get(
+            'https://api.themoviedb.org/3/search/movie',
+            params={'api_key': os.getenv('API_KEY'), 'query': movie_title}
+            )
+        data = response.json()['results']
+        return render_template('select.html', movies_data=data)
+    return render_template('add.html', form=add_form)
+
+
+@app.route('/find')
+def find_movie():
+    movie_api_id = request.args.get('id')
+    if movie_api_id:
+        movie_db_image_url = "https://image.tmdb.org/t/p/w500"
+        movie_api_url=f'https://api.themoviedb.org/3/movie/{movie_api_id}'
+        response = requests.get(movie_api_url, params={'api_key': os.getenv('API_KEY'), 'language':'en-US'})
+        data = response.json()
+        new_movie_details = Movie(
+            title = data["title"],
+            year=data["release_date"].split("-")[0],
+            img_url=f"{movie_db_image_url}{data['poster_path']}",
+            description=data["overview"],
+            rating=0,
+            ranking=data['popularity'],
+            review='Write some'
+        )
+        db.session.add(new_movie_details)
+        db.session.commit()
+        return redirect(url_for('edit_movie_rating', id=new_movie_details.id))
+
+
 
 
 
