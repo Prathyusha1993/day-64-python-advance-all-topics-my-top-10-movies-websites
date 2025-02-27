@@ -88,8 +88,11 @@ class AddForm(FlaskForm):
 
 @app.route("/")
 def home():
-    result = db.session.execute(db.select(Movie))
+    result = db.session.execute(db.select(Movie).order_by(Movie.rating))
     movie_list = result.scalars().all()
+    for i in range(len(movie_list)):
+        movie_list[i].ranking = len(movie_list) - i
+    db.session.commit()
     return render_template("index.html", movies=movie_list)
 
 @app.route('/edit', methods=['GET', 'POST'])
